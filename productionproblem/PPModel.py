@@ -2,11 +2,13 @@ from gurobipy import *
 
 
 class PPModel:
+
+    nonContinuousVars = []
+
     def __init__(self):
         self.model = Model()
         self.x1 = None
         self.x2 = None
-        self.nonContinuousVars = []
 
     def initModel(self):
         """建立决策变量"""
@@ -35,7 +37,7 @@ class PPModel:
             # 检查变量类型是否为非连续类型
             if var.vtype != GRB.CONTINUOUS:
                 # 将非连续变量添加到非连续变量列表中
-                self.nonContinuousVars.append(var)
+                PPModel.nonContinuousVars.append(var.varName)
                 # 将变量类型强制转换为连续型
                 var.vtype = GRB.CONTINUOUS
                 # 设置变量的下界为0
@@ -61,5 +63,10 @@ class PPModel:
     @staticmethod
     def getVarsValues(model):
         return {var.varName: var.x for var in model.getVars()}
+
+    @staticmethod
+    def getRoundedVarsValues(model):
+        return {var.varName: (int(var.x) if var.varName not in PPModel.nonContinuousVars else var.x) for var in model.getVars()}
+
 
 

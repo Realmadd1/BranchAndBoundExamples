@@ -4,26 +4,26 @@ from productionproblem.Node import Node
 from productionproblem.PPModel import PPModel
 
 
-class BrandAndBound:
+class BrandAndBound:        # MAX问题
     def __init__(self, modelClass):
-        self.modelClass = modelClass        # 初始化模型类
-        self.nodeModel = None               # 根节点模型
-        self.nonContinuousVars = []         # 非连续变量列表
-        self.global_UB = np.inf             # 全局上界（线性松弛后的解）
-        self.global_LB = 0                  # 全局下界（任意满足整数要求的可行解）
-        self.eps = 1e-3                     # 误差精度
-        self.incumbentNode = None           # 当前节点
-        self.gap = np.inf                   # 当前全局上下界误差
-        self.Queue = []                     # 待处理队列
-        self.globalUBChang = []             # 全局上界变化记录
-        self.globalLBChang = []             # 全局下界变化记录
+        self.modelClass = modelClass            # 初始化模型类
+        self.nodeModel = None                   # 根节点模型
+        self.nonContinuousVars = []             # 非连续变量列表
+        self.global_UB = np.inf                 # 全局上界（线性松弛后的解）
+        self.global_LB = 0                      # 全局下界（任意满足整数要求的可行解）
+        self.eps = 1e-3                         # 误差精度
+        self.incumbentNode = None               # 当前节点
+        self.gap = np.inf                       # 当前全局上下界误差
+        self.Queue = []                         # 待处理队列
+        self.globalUBChang = []                 # 全局上界变化记录
+        self.globalLBChang = []                 # 全局下界变化记录
 
     def run(self):
         # 初始化模型
         self.__establishModel()
         # 求解模型
         PPModel.solveModel(self.nodeModel)
-        self.global_UB = PPModel.getObjective(self.nodeModel)       # 最大化问题，线性松弛时的解为全局上界
+        self.global_UB = PPModel.getObjective(self.nodeModel)  # 最大化问题，线性松弛时的解为全局上界
         # 创建初始节点
         self.__createRootNode()
         # 开始分支定界
@@ -41,7 +41,7 @@ class BrandAndBound:
         self.modelClass.initModel()
         # 线性化模型
         self.modelClass.linearizeModel()
-        self.nonContinuousVars = self.modelClass.nonContinuousVars
+        self.nonContinuousVars = PPModel.nonContinuousVars
         # 获得根节点模型
         self.nodeModel = self.modelClass.getModel()
 
@@ -73,8 +73,113 @@ class BrandAndBound:
         cnt = 0
         while len(self.Queue) > 0 and self.global_UB - self.global_LB > self.eps:
             # 从队列中取出一个节点
-            node = self.Queue.pop(0)
+            current_node = self.Queue.pop(0)
             cnt += 1
+
+            # 求解当前节点的模型
+            PPModel.solveModel(current_node.model)
+            solutionStatus = current_node.model.Status
+            """
+            OPTIMAL = 2
+            INFEASIBLE = 3
+            UNBOUNDED = 5
+            """
+
+            # ----------------------------------------------
+            # 注意剪枝规则
+            # 1. 最优性剪枝
+            #       即为整数解
+            #       对于最小化问题来说，任意可行整数解为全局上界
+            #       对于最大化问题来说，任意可行整数解为全局下界  √
+            # 2. 界限剪枝
+            #       对于最小化问题，节点下界大于全局上界
+            #       对于最大化问题，节点上界小于全局下界  √
+            # 3. 不可行性剪枝
+            #
+            # 可行的时候需要判断1和2
+            # 不可行直接默认剪枝
+            # ----------------------------------------------
+
+            isInteger = True  # 是否为整数解
+            isPrune = False  # 是否需要剪枝
+
+            if solutionStatus == 2:
+                current_node.x_sol = PPModel.getVarsValues(current_node.model)
+                current_node.x_int_sol = PPModel.getRoundedVarsValues(current_node.model)
+
+                """
+                整数解的相关判断
+                """
+                # 判断是否为整数解
+                for varName in self.nonContinuousVars:
+                    if current_node.x_sol[varName] - current_node.x_int_sol[varName] > self.eps:
+                        isInteger = False
+
+                if isInteger:   # 为整数解
+                    current_node.isInteger = True
+                    # 更新当前节点的上下界
+                    # 当为整数解时，上下界都为当前节点的线性松弛解，即找到当前节点的最优解
+                    current_node.local_UB = PPModel.getObjective(current_node.model)
+                    current_node.local_LB = PPModel.getObjective(current_node.model)
+                    # 对于最大化问题来说，任意可行整数解为全局下界
+                    # 判断是否需要更新全局下界
+                    if current_node.local_LB > self.global_LB:
+                        self.global_LB = current_node.local_LB
+                        self.incumbentNode = Node.deepcopyNode(current_node)
+                else:           # 非整数解
+                    current_node.isInteger = False
+                    # 更新当前节点的上下界
+                    # 对于最大化问题来说，当前节点的线性松弛解为当前节点的本地上界
+                    # 下界即为任意一个可行的整数解
+                    current_node.local_UB = PPModel.getObjective(current_node.model)
+                    current_node.local_LB = 0
+                    for varName, value in current_node.x_int_sol.items():
+                        var = current_node.model.getVarByName(varName)
+                        current_node.local_LB += value * var.getAttr('Obj')
+                    # 判断是否需要更新全局下界
+                    if current_node.local_LB > self.global_LB:
+                        self.global_LB = current_node.local_LB
+                        # 这里的意义？？
+                        self.incumbentNode = Node.deepcopyNode(current_node)
+                        self.incumbentNode.local_LB = current_node.local_LB
+                        self.incumbentNode.local_UB = current_node.local_UB
+
+                """
+                剪枝的相关判断
+                """
+                if isInteger:   # 最优性剪枝
+                    isPrune = True
+                else:
+                    if current_node.local_UB - current_node.local_LB < self.eps:  # 界限剪枝
+                        isPrune = True
+                self.gap = round((self.global_UB - self.global_LB) * 100 / self.global_LB, 2)
+
+            else:   # 不可行剪枝
+                isInteger = False
+                isPrune = True
+
+            if isPrune:
+                continue
+
+            """
+            剪枝操作
+            """
+            if not isPrune:
+                pass
+
+            break
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
