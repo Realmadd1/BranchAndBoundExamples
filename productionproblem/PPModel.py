@@ -20,22 +20,46 @@ class PPModel:
         self.model.update()
 
     def linearizeModel(self):
+        """
+        将模型中的所有非连续变量转换为连续变量。
+
+        该方法遍历模型中的所有变量，如果发现变量类型不是连续的（例如，整数或二进制变量），
+        则将其转换为连续变量，并设置其下界为0，上界为无穷大。这样做的目的是为了线性化模型，
+        使得模型更适合使用线性规划算法进行求解。
+
+        注意：这个方法会修改原始模型的变量类型，因此应在调用此方法前后对模型的状态进行适当管理。
+        """
+
+        # 遍历模型中的所有变量
         for var in self.model.getVars():
+            # 检查变量类型是否为非连续类型
             if var.vtype != GRB.CONTINUOUS:
+                # 将非连续变量添加到非连续变量列表中
                 self.nonContinuousVars.append(var)
+                # 将变量类型强制转换为连续型
                 var.vtype = GRB.CONTINUOUS
+                # 设置变量的下界为0
                 var.lb = 0
+                # 设置变量的上界为无穷大
                 var.ub = GRB.INFINITY
+        self.model.update()
 
     def getModel(self):
         return self.model
 
-    def solve(self):
-        self.model.optimize()
-        if self.model.status == GRB.OPTIMAL:
-            print("目标函数值：", self.model.objVal)
-            print("x1的值：", self.x1.x)
-            print("x2的值：", self.x2.x)
-        else:
-            print("无解")
+    @staticmethod
+    def solveModel(model):
+        model.optimize()
+        varsValues = PPModel.getVarsValues(model)
+        for varName, value in varsValues.items():
+            print(f"{varName} = {value}")
+
+    @staticmethod
+    def getObjective(model):
+        return model.objVal
+
+    @staticmethod
+    def getVarsValues(model):
+        return {var.varName: var.x for var in model.getVars()}
+
 
