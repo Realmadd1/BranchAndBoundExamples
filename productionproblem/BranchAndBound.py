@@ -114,6 +114,8 @@ class BrandAndBound:        # MAX问题
                 for varName in self.nonContinuousVars:
                     if current_node.x_sol[varName] - current_node.x_int_sol[varName] > self.eps:
                         isInteger = False
+                        # 将需要分支的变量存储
+                        current_node.branchVarList.append(varName)
 
                 if isInteger:   # 为整数解
                     current_node.isInteger = True
@@ -158,16 +160,61 @@ class BrandAndBound:        # MAX问题
                 isInteger = False
                 isPrune = True
 
+            """
+            剪枝操作
+            """
             if isPrune:
                 continue
 
             """
-            剪枝操作
+            分支操作
             """
             if not isPrune:
-                pass
+                # 选择需要分支的变量,并确定分支两边的值
+                branchVarName = current_node.branchVarList[0]
+                leftVarBound = current_node.x_int_sol[branchVarName]
+                rightVarBound = current_node.x_int_sol[branchVarName] + 1
+
+                # 创建两个子节点
+                leftNode = Node.deepcopyNode(current_node)
+                rightNode = Node.deepcopyNode(current_node)
+
+                # 首先创建左子节点
+                tempVar = leftNode.model.getVarByName(branchVarName)
+                leftNode.model.addConstr(tempVar <= leftVarBound, name="branch_left_" + str(cnt))
+                leftNode.model.setParam('OutputFlag', 0)
+                leftNode.model.update()
+                cnt += 1
+                leftNode.cnt = cnt
+
+                # 其次创建右子节点
+                tempVar = rightNode.model.getVarByName(branchVarName)
+                rightNode.model.addConstr(tempVar >= rightVarBound, name="branch_right_" + str(cnt))
+                rightNode.model.setParam('OutputFlag', 0)
+                rightNode.model.update()
+                cnt += 1
+                rightNode.cnt = cnt
+
+                # 将左右子节点加入队列
+                self.Queue.append(leftNode)
+                self.Queue.append(rightNode)
+
+            tempGlobalUB = 0
+            for node in self.Queue:
+                node.model.optimize()
+                if node.model.status == 2:
+                    if PPModel.getObjective(node.model) >= tempGlobalUB:
+                        tempGlobalUB = PPModel.getObjective(node.model)
+            self.global_UB = tempGlobalUB
+            self.globalUBChang.append(self.global_UB)
+            self.globalLBChang.append(self.global_LB)
+
+
+
 
             break
+
+
 
 
 

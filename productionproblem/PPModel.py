@@ -38,12 +38,17 @@ class PPModel:
             if var.vtype != GRB.CONTINUOUS:
                 # 将非连续变量添加到非连续变量列表中
                 PPModel.nonContinuousVars.append(var.varName)
-                # 将变量类型强制转换为连续型
-                var.vtype = GRB.CONTINUOUS
+                # 设置变量的上界
+                if var.vtype == GRB.BINARY:
+                    var.ub = 1
+                else:
+                    var.ub = GRB.INFINITY
                 # 设置变量的下界为0
                 var.lb = 0
-                # 设置变量的上界为无穷大
-                var.ub = GRB.INFINITY
+                # 将变量类型强制转换为连续型
+                var.vtype = GRB.CONTINUOUS
+
+
         self.model.update()
 
     def getModel(self):
@@ -66,7 +71,7 @@ class PPModel:
 
     @staticmethod
     def getRoundedVarsValues(model):
-        return {var.varName: (int(var.x) if var.varName not in PPModel.nonContinuousVars else var.x) for var in model.getVars()}
+        return {var.varName: (int(var.x) if var.varName in PPModel.nonContinuousVars else var.x) for var in model.getVars()}
 
 
 
