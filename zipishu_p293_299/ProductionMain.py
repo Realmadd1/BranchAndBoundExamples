@@ -1,5 +1,5 @@
-from p293_299.BranchAndBound import BrandAndBound
-from p293_299.PPModel import PPModel
+from zipishu_p293_299.BranchAndBound import BrandAndBound
+from zipishu_p293_299.PPModel import PPModel
 
 
 def main():

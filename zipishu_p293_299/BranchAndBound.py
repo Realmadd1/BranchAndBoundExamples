@@ -1,8 +1,8 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-from p293_299.Node import Node
-from p293_299.PPModel import PPModel
+from zipishu_p293_299.Node import Node
+from zipishu_p293_299.PPModel import PPModel
 
 
 class BrandAndBound:        # MAX问题
