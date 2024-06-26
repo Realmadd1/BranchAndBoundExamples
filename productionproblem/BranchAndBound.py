@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import numpy as np
 
 from productionproblem.Node import Node
@@ -12,7 +13,7 @@ class BrandAndBound:        # MAX问题
         self.global_UB = np.inf                 # 全局上界（线性松弛后的解）
         self.global_LB = 0                      # 全局下界（任意满足整数要求的可行解）
         self.eps = 1e-3                         # 误差精度
-        self.incumbentNode = None               # 当前节点
+        self.incumbentNode = None               # 当前最优节点
         self.gap = np.inf                       # 当前全局上下界误差
         self.Queue = []                         # 待处理队列
         self.globalUBChang = []                 # 全局上界变化记录
@@ -28,6 +29,10 @@ class BrandAndBound:        # MAX问题
         self.__createRootNode()
         # 开始分支定界
         self.__branchAndBound()
+        # 输出结果
+        self.__showResult()
+        # 画图
+        self.__plotResults()
 
     def __establishModel(self):
         """
@@ -115,7 +120,7 @@ class BrandAndBound:        # MAX问题
                     if current_node.x_sol[varName] - current_node.x_int_sol[varName] > self.eps:
                         isInteger = False
                         # 将需要分支的变量存储
-                        current_node.branchVarList.append(varName)
+                        current_node.branch_var_list .append(varName)
 
                 if isInteger:   # 为整数解
                     current_node.isInteger = True
@@ -171,7 +176,7 @@ class BrandAndBound:        # MAX问题
             """
             if not isPrune:
                 # 选择需要分支的变量,并确定分支两边的值
-                branchVarName = current_node.branchVarList[0]
+                branchVarName = current_node.branch_var_list [0]
                 leftVarBound = current_node.x_int_sol[branchVarName]
                 rightVarBound = current_node.x_int_sol[branchVarName] + 1
 
@@ -209,10 +214,46 @@ class BrandAndBound:        # MAX问题
             self.globalUBChang.append(self.global_UB)
             self.globalLBChang.append(self.global_LB)
 
+        # 所有节点已经被探索,更新上下界
+        self.global_UB = self.global_LB
+        self.globalUBChang.append(self.global_UB)
+        self.globalLBChang.append(self.global_LB)
+        self.gap = round((self.global_UB - self.global_LB) * 100 / self.global_LB, 2)
 
+    def __showResult(self):
+        print('\n\n\n\n')
+        print('--------------------------------------')
+        print('      Branch and Bound terminates     ')
+        print('        Optimal solution found        ')
+        print('--------------------------------------')
+        print('\nFinal Gap = ', self.gap, ' %')
+        print('Optimal Solution:', self.incumbentNode.x_int_sol)
+        print('Optimal Obj:', self.global_LB)
 
+    def __plotResults(self):
+        fig = plt.figure(1)
+        plt.figure(figsize=(15, 10))
+        fontDict = {
+            "family": "Arial",
+            "style": "oblique",
+            "weight": "normal",
+            "size": 20
+        }
 
-            break
+        plt.rcParams['figure.figsize'] = (12.0, 8.0)    # 单位是inches
+        plt.rcParams['font.family'] = ["Arial"]
+        plt.rcParams['font.size'] = 16
+
+        xCor = range(1, len(self.globalLBChang) + 1)
+        plt.plot(xCor, self.globalLBChang, 'r-', label='Global Lower Bound')
+        plt.plot(xCor, self.globalUBChang, 'b-', label='Global Upper Bound')
+        plt.legend()
+        plt.xlabel('Iteration', fontdict=fontDict)
+        plt.ylabel('Bounds update', fontdict=fontDict)
+        plt.title('Bounds update during Branch and Bound', fontsize=23)
+        plt.savefig('Bound_updates.eps')
+        plt.show()
+
 
 
 
